@@ -1,0 +1,140 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  USER
+  ADM
+  SUPER_ADMIN
+}
+
+enum MemoStatus {
+  DRAFT
+  SENT
+  RECEIVED
+  IN_PROGRESS
+  RETURNED
+  COMPLETED
+}
+
+enum Priority {
+  NORMAL
+  HIGH
+  URGENT
+  CONFIDENTIAL
+}
+
+enum RecipientStatus {
+  SENT
+  RECEIVED
+  RETURNED
+  COMPLETED
+}
+
+model Secretary {
+  id            String          @id @default(uuid())
+  name          String
+  acronym       String          @unique
+  secretaryName String?
+  watermarkUrl  String?
+  isActive      Boolean         @default(true)
+  createdAt     DateTime        @default(now())
+  departments   Department[]
+  users         User[]
+  recipients    MemoRecipient[]
+}
+
+model Department {
+  id           String      @id @default(uuid())
+  name         String
+  acronym      String
+  logoUrl      String?
+  watermarkUrl String?
+  isActive     Boolean     @default(true)
+  createdAt    DateTime    @default(now())
+  secretaryId  String?
+  secretary    Secretary?  @relation(fields: [secretaryId], references: [id])
+
+  users      User[]
+  recipients MemoRecipient[]
+
+  @@unique([secretaryId, acronym]) // ✅ sigla única por secretaria, não global
+}
+
+model User {
+  id           String     @id @default(uuid())
+  name         String
+  email        String     @unique
+  password     String
+  registration      String     @unique
+  registrationLabel String     @default("Matrícula")
+  position          String?
+  role         Role       @default(USER)
+  isActive     Boolean    @default(true)
+  createdAt    DateTime   @default(now())
+
+  departmentId String?    // ✅ agora opcional
+  department   Department? @relation(fields: [departmentId], references: [id])
+
+  secretaryId  String?    // ✅ vínculo direto com secretaria
+  secretary    Secretary? @relation(fields: [secretaryId], references: [id])
+
+  sentMemos    Memo[]     @relation("SenderUser")
+}
+
+model Memo {
+  id        String     @id @default(uuid())
+  protocol  String?    @unique
+  subject   String
+  body      String     @db.Text
+  status    MemoStatus @default(DRAFT)
+  priority  Priority   @default(NORMAL)
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  senderId String
+  sender   User   @relation("SenderUser", fields: [senderId], references: [id])
+
+  recipients MemoRecipient[]
+  signature  Signature?
+  events     MemoEvent[]
+}
+
+model MemoRecipient {
+  id     String          @id @default(uuid())
+  status RecipientStatus @default(SENT)
+
+  memoId       String
+  memo         Memo        @relation(fields: [memoId], references: [id])
+  departmentId String?
+  department   Department? @relation(fields: [departmentId], references: [id])
+  secretaryId  String?
+  secretary    Secretary?  @relation(fields: [secretaryId], references: [id])
+}
+
+model Signature {
+  id               String   @id @default(uuid())
+  verificationCode String   @unique
+  signedAt         DateTime @default(now())
+
+  memoId String @unique
+  memo   Memo   @relation(fields: [memoId], references: [id])
+}
+
+model MemoEvent {
+  id        String   @id @default(uuid())
+  icon      String
+  label     String
+  user      String
+  dept      String
+  color     String?
+  createdAt DateTime @default(now())
+
+  memoId String
+  memo   Memo   @relation(fields: [memoId], references: [id])
+}
